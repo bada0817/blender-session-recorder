@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "session_recorder"
-version = "0.2.0"
+version = "0.2.1"
 name = "Session Recorder"
 tagline = "Logs what you do in Blender next to the .blend file"
 maintainer = "bada0"

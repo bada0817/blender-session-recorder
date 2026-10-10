@@ -459,7 +459,12 @@ def _tick() -> float:
         _state.ops_since_shot += ops
         if ops:
             _ui_redraw()
-        if _state.held and time.monotonic() - _state.held_time > _HELD_TIMEOUT:
+        # Write merged clicks and undo/redo once they stop repeating. A single operator or property
+        # change stays held until the next event, it can still be adjusted (F9) at any time.
+        if (
+                any("n" in event for event in _state.held) and
+                time.monotonic() - _state.held_time > _HELD_TIMEOUT
+        ):
             _held_flush()
         mode = bpy.context.mode
         mode_changed = bool(_state.mode) and mode != _state.mode
@@ -527,7 +532,7 @@ def _on_save_post(*_args) -> None:
     _state.save_stats = stats
     _write({"t": _now(), "ev": "save", "file": os.path.basename(filepath), "id": _file_id(), "stats": stats})
     prefs = _prefs()
-    if prefs and prefs.shot_on_save:
+    if prefs and prefs.shot_on_save and now - _state.shot_time >= prefs.shot_min_interval:
         _shot_deferred("save")
 
 
@@ -823,7 +828,7 @@ class _SessionRecorderPreferences(bpy.types.AddonPreferences):
     )
     shot_min_interval: FloatProperty(  # type: ignore[valid-type]
         name="Minimum Gap",
-        description="Seconds between automatic screenshots (start, stop, saves and notes always take one)",
+        description="Seconds between automatic screenshots, also on save (start, stop and notes always take one)",
         default=60.0,
         min=0.0,
         max=3600.0,
