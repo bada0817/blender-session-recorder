@@ -1,0 +1,30 @@
+schema_version = "1.0.0"
+
+id = "session_recorder"
+version = "0.1.0"
+name = "Session Recorder"
+tagline = "Logs what you do in Blender next to the .blend file"
+maintainer = "bada0"
+type = "add-on"
+blender_version_min = "5.1.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+tags = ["System"]
+
+[permissions]
+files = "Writes a log and viewport screenshots next to the .blend file"
+
+[build]
+# The defaults plus repository-only files that aren't needed inside Blender.
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/.claude/",
+  "/*.zip",
+  "/.gitignore",
+  "/docs/",
+  "/tests/",
+]
