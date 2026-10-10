@@ -4,6 +4,7 @@
 
 [![Blender 5.1+](https://img.shields.io/badge/Blender-5.1%2B-E87D0D?logo=blender&logoColor=white)](https://www.blender.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/bada0817/blender-session-recorder)](https://github.com/bada0817/blender-session-recorder/releases/latest)
 
 블렌더에서 한 작업을 `.blend` 파일 옆에 **순서대로 기록**하는 Blender 확장(5.1+).
 다른 애드온이나 외부 프로그램 없이 블렌더 안에서 혼자 동작합니다.

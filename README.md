@@ -4,6 +4,7 @@
 
 [![Blender 5.1+](https://img.shields.io/badge/Blender-5.1%2B-E87D0D?logo=blender&logoColor=white)](https://www.blender.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/bada0817/blender-session-recorder)](https://github.com/bada0817/blender-session-recorder/releases/latest)
 
 A Blender extension (5.1+) that **records what you do, in order**, to a log next to the `.blend` file.
 It runs on its own inside Blender, no other add-on or external program needed.
