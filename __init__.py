@@ -13,6 +13,7 @@ __all__ = (
     "unregister",
 )
 
+import hashlib
 import json
 import os
 import re
@@ -50,8 +51,12 @@ _COLLAPSE_OPS = frozenset((
     "view3d.select_circle",
     "view3d.select_lasso",
 ))
-# Seconds without a repeat before a merged click line is written.
-_COLLAPSE_TIMEOUT = 3.0
+# Seconds without a change before held events (merged clicks, undo ...) are written.
+_HELD_TIMEOUT = 3.0
+# Seconds between the undo step and the new run of an operator adjusted with F9 (both arrive in one check).
+_ADJUST_TIMEOUT = 1.0
+# Seconds in which a save without changes is not written again.
+_SAVE_REPEAT_TIMEOUT = 5.0
 
 # Property changes that are about the editor view, not the work.
 _VIEW_PROPERTY_RE = re.compile(
@@ -81,13 +86,16 @@ class _State:
         "last_uid",
         "log_dir",
         "events_pending",
-        "collapse",
-        "collapse_time",
+        "held",
+        "held_time",
         "session_open",
         "mode",
         "ops_since_shot",
         "shot_time",
         "shot_count",
+        "shot_last",
+        "save_time",
+        "save_stats",
         "op_count",
     )
 
@@ -97,14 +105,19 @@ class _State:
         self.log_dir: str | None = None
         # Events of an unsaved file, written on its first save.
         self.events_pending: list[dict] = []
-        # A click event that is still counting repeats.
-        self.collapse: dict | None = None
-        self.collapse_time = 0.0
+        # Events that may still change: a click counting repeats, an operator that may be
+        # adjusted from the "Adjust Last Operation" panel and the undo step that comes with it.
+        self.held: list[dict] = []
+        self.held_time = 0.0
         self.session_open = False
         self.mode = ""
         self.ops_since_shot = 0
         self.shot_time = 0.0
         self.shot_count = 0
+        # Name and content hash of the last screenshot, to skip identical ones.
+        self.shot_last: tuple[str, str] | None = None
+        self.save_time = 0.0
+        self.save_stats: dict | None = None
         self.op_count = 0
 
 
@@ -131,38 +144,68 @@ def _write(event: dict) -> None:
         print("Session Recorder: failed to write log:", ex)
 
 
-def _collapse_flush() -> None:
-    if _state.collapse is not None:
-        _write(_state.collapse)
-        _state.collapse = None
+def _held_flush() -> None:
+    for event in _state.held:
+        _write(event)
+    _state.held.clear()
 
 
 def _emit(event: dict) -> None:
     """
-    Write an event, merging repeated clicks of the same operator.
+    Write an event, merging repeated clicks, repeated undo/redo
+    and changes made in the "Adjust Last Operation" panel (F9).
     """
+    held = _state.held
+    now = time.monotonic()
+    ev = event["ev"]
     op = event.get("op")
-    if event.get("ev") == "op" and op in _COLLAPSE_OPS:
-        if _state.collapse is not None and _state.collapse.get("op") == op:
-            _state.collapse["n"] += 1
-            _state.collapse["t_end"] = event["t"]
+    last = held[-1] if held else None
+    if ev in {"undo", "redo"}:
+        if last is not None and last["ev"] == ev:
+            last["n"] += 1
+            last["t_end"] = event["t"]
+        elif ev == "undo" and last is not None and last["ev"] == "op" and last.get("n") is None:
+            # Might be the undo step of an adjustment, decided by the next event.
+            held.append({**event, "n": 1})
         else:
-            _collapse_flush()
-            # The arguments of a single click (edge index ...) mean nothing on their own.
-            _state.collapse = {**event, "msg": op + "(...)", "n": 1}
-        _state.collapse_time = time.monotonic()
-        return
-    if event.get("ev") in {"undo", "redo"}:
-        if _state.collapse is not None and _state.collapse.get("ev") == event["ev"]:
-            _state.collapse["n"] += 1
-            _state.collapse["t_end"] = event["t"]
+            _held_flush()
+            held.append({**event, "n": 1})
+    elif ev == "op":
+        if (
+                len(held) == 2 and
+                held[0]["ev"] == "op" and held[0]["op"] == op and
+                held[1]["ev"] == "undo" and held[1]["n"] == 1 and
+                now - _state.held_time < _ADJUST_TIMEOUT
+        ):
+            # Adjusting the last operation undoes it and runs it again with the new values.
+            held.pop()
+            held[0]["msg"] = event["msg"]
+            held[0]["adjusted"] = held[0].get("adjusted", 0) + 1
+            held[0]["t_end"] = event["t"]
+        elif op in _COLLAPSE_OPS and last is not None and last.get("op") == op:
+            last["n"] += 1
+            last["t_end"] = event["t"]
         else:
-            _collapse_flush()
-            _state.collapse = {**event, "n": 1}
-        _state.collapse_time = time.monotonic()
+            _held_flush()
+            if op in _COLLAPSE_OPS:
+                # The arguments of a single click (edge index ...) mean nothing on their own.
+                event = {**event, "msg": op + "(...)", "n": 1}
+            held.append(event)
+    elif ev == "prop":
+        path = event["msg"].partition(" = ")[0]
+        if last is not None and last["ev"] == "prop" and last["msg"].partition(" = ")[0] == path:
+            # Dragging or retyping the same value, keep the final one.
+            last["msg"] = event["msg"]
+            last["adjusted"] = last.get("adjusted", 0) + 1
+            last["t_end"] = event["t"]
+        else:
+            _held_flush()
+            held.append(event)
+    else:
+        _held_flush()
+        _write(event)
         return
-    _collapse_flush()
-    _write(event)
+    _state.held_time = now
 
 
 def _log_open(filepath: str) -> None:
@@ -173,6 +216,7 @@ def _log_open(filepath: str) -> None:
     os.makedirs(os.path.join(log_dir, SHOTS_DIR), exist_ok=True)
     is_new = not os.path.exists(os.path.join(log_dir, LOG_NAME))
     _state.log_dir = log_dir
+    _state.shot_last = None
     _state.shot_count = len([f for f in os.listdir(os.path.join(log_dir, SHOTS_DIR)) if f.endswith(".png")])
     if is_new:
         _write({"t": _now(), "ev": "log_created", "file": filepath, "id": _file_id()})
@@ -210,7 +254,7 @@ def _session_end() -> None:
         return
     _poll_reports()
     _emit({"t": _now(), "ev": "session_end", "ops": _state.op_count})
-    _collapse_flush()
+    _held_flush()
     if _state.log_dir is None and len(_state.events_pending) > 1:
         # Never saved, keep the events in the add-on's own folder.
         try:
@@ -329,6 +373,19 @@ def _shot(reason: str) -> None:
         return
     _state.shot_time = time.monotonic()
     _state.ops_since_shot = 0
+    try:
+        with open(filepath, "rb") as fh:
+            digest = hashlib.sha1(fh.read()).hexdigest()
+    except OSError:
+        return
+    if _state.shot_last is not None and _state.shot_last[1] == digest:
+        # Nothing changed on screen, point to the existing screenshot instead.
+        os.remove(filepath)
+        _state.shot_count -= 1
+        if reason != "note":
+            return
+        name = _state.shot_last[0]
+    _state.shot_last = (name, digest)
     _emit({"t": _now(), "ev": "shot", "file": SHOTS_DIR + "/" + name, "why": reason})
 
 
@@ -360,8 +417,8 @@ def _tick() -> float:
     try:
         ops = _poll_reports()
         _state.ops_since_shot += ops
-        if _state.collapse is not None and time.monotonic() - _state.collapse_time > _COLLAPSE_TIMEOUT:
-            _collapse_flush()
+        if _state.held and time.monotonic() - _state.held_time > _HELD_TIMEOUT:
+            _held_flush()
         mode = bpy.context.mode
         mode_changed = bool(_state.mode) and mode != _state.mode
         _state.mode = mode
@@ -405,7 +462,7 @@ def _on_save_post(*_args) -> None:
         return
     filepath = bpy.data.filepath
     _poll_reports()
-    _collapse_flush()
+    _held_flush()
     log_dir_new = _log_dir_from_blend(filepath)
     if _state.log_dir != log_dir_new:
         # First save, or "Save As" under a new name.
@@ -417,7 +474,14 @@ def _on_save_post(*_args) -> None:
             _write({"t": _now(), "ev": "continued_from", "log": os.path.join(log_dir_old, LOG_NAME)})
         for event in pending:
             _write(event)
-    _write({"t": _now(), "ev": "save", "file": os.path.basename(filepath), "stats": _stats()})
+    stats = _stats()
+    now = time.monotonic()
+    if stats == _state.save_stats and now - _state.save_time < _SAVE_REPEAT_TIMEOUT:
+        # The same save again (e.g. Ctrl+S pressed twice).
+        return
+    _state.save_time = now
+    _state.save_stats = stats
+    _write({"t": _now(), "ev": "save", "file": os.path.basename(filepath), "id": _file_id(), "stats": stats})
     prefs = _prefs()
     if prefs and prefs.shot_on_save:
         _shot_deferred("save")

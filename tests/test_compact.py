@@ -28,8 +28,8 @@ class TestCompact(unittest.TestCase):
         self.assertEqual(op_call_compact(msg), "transform.rotate(value=3.75246, orient_axis='X')")
 
     def test_non_default_kept(self):
-        msg = "bpy.ops.transform.translate(value=(0, 0, 1), mirror=True, orient_type='LOCAL')"
-        self.assertEqual(op_call_compact(msg), "transform.translate(value=(0, 0, 1), mirror=True, orient_type='LOCAL')")
+        msg = "bpy.ops.transform.translate(value=(0, 0, 1), mirror=True, use_proportional_edit=True, orient_type='LOCAL')"
+        self.assertEqual(op_call_compact(msg), "transform.translate(value=(0, 0, 1), use_proportional_edit=True, orient_type='LOCAL')")
 
     def test_macro(self):
         msg = (

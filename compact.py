@@ -24,6 +24,8 @@ _NOISE_KEYS = frozenset((
     "enter_editmode",
     "falloff",
     "mesh_select_mode_init",
+    # Mirror state of the transform (set after adjusting an operator), not mirror editing.
+    "mirror",
     "object_index",
     "orient_matrix",
     "orient_matrix_type",
@@ -49,7 +51,6 @@ _NOISE_KEYS = frozenset((
 _DEFAULTS = {
     "flipped": "False",
     "location": "(0, 0, 0)",
-    "mirror": "False",
     "offset_pct": "0",
     "orient_type": "'GLOBAL'",
     "rotation": "(0, 0, 0)",
