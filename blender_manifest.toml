@@ -6,6 +6,7 @@ name = "Session Recorder"
 tagline = "Logs what you do in Blender next to the .blend file"
 maintainer = "bada0"
 type = "add-on"
+website = "https://github.com/bada0817/blender-session-recorder"
 blender_version_min = "5.1.0"
 
 license = [

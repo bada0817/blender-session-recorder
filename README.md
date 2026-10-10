@@ -1,25 +1,37 @@
 # Session Recorder
 
-블렌더에서 한 작업을 `.blend` 파일 옆에 **순서대로 기록**하는 Blender 확장(5.1+).
-Claude/MCP 없이 블렌더 안에서 혼자 동작합니다. 기록은 나중에 학습 노트(The Daily Blender)를 쓸 때 재료로 씁니다.
+**English** | [한국어](README.ko.md)
 
-## 기록되는 것
+[![Blender 5.1+](https://img.shields.io/badge/Blender-5.1%2B-E87D0D?logo=blender&logoColor=white)](https://www.blender.org/)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue)](LICENSE)
 
-| 이벤트 `ev` | 내용 | 출처 |
+A Blender extension (5.1+) that **records what you do, in order**, to a log next to the `.blend` file.
+It runs on its own inside Blender, no other add-on or external program needed.
+
+## Why
+
+Writing study notes after following a tutorial or modeling on your own means taking screenshots again
+and scrubbing back through the video to remember what you did and in which order.
+This extension keeps the actions with their values, your notes and screenshots in one file while you work,
+so the notes can be written from that record later (by you, or by handing it to an AI tool).
+
+## What is recorded
+
+| Event `ev` | Content | Source |
 |---|---|---|
-| `session_start` / `session_end` | 녹화 시작(제목 `title`) / 종료(`comment`, `reason`, 동작 수 `ops`, 걸린 시간 `minutes`) | Start/Stop 버튼 |
-| `op` | 실행한 동작과 **값** (`mesh.bevel(offset=0.03, segments=2)`). 기본값 인자는 생략 | Info 에디터 리포트 |
-| `prop` | 패널에서 바꾼 값 (`bpy.context.object.modifiers["Bevel"].width = 0.02`) | Info 에디터 리포트 |
-| `undo` / `redo` | `Ctrl+Z` / `Ctrl+Shift+Z`, 연속이면 `n`으로 묶음 | undo/redo 핸들러 |
-| `error` | 경고·에러 메시지 (막힌 지점 단서) | Info 에디터 리포트 |
-| `info` | 그 밖의 안내 메시지 | Info 에디터 리포트 |
-| `save` | 저장 + 통계 (오브젝트 수, 버텍스/면 수, 메시별 모디파이어 스택) | save 핸들러 |
-| `shot` | 3D 뷰포트 스크린샷 (`shots/0007.png`)과 이유 `start`·`stop`·`save`·`mode`·`ops`·`note` | 타이머 |
-| `note` | `Ctrl+Alt+N`으로 남긴 메모 | 오퍼레이터 |
-| `log_created` / `continued_from` | 로그 생성 / 다른 이름으로 저장하기 전 로그 경로 | save 핸들러 |
+| `session_start` / `session_end` | Recording started (`title`) / stopped (`comment`, `reason`, number of actions `ops`, `minutes`) | Start/Stop buttons |
+| `op` | The operator and its **values** (`mesh.bevel(offset=0.03, segments=2)`), default arguments left out | Info editor reports |
+| `prop` | A value changed in a panel (`bpy.context.object.modifiers["Bevel"].width = 0.02`) | Info editor reports |
+| `undo` / `redo` | `Ctrl+Z` / `Ctrl+Shift+Z`, repeats merged with a count `n` | undo/redo handlers |
+| `error` | Warnings and errors (hints of where you got stuck) | Info editor reports |
+| `info` | Other messages | Info editor reports |
+| `save` | Save with statistics (object count, vertices/faces, modifier stack per mesh) | save handler |
+| `shot` | 3D viewport screenshot (`shots/0007.png`) and why: `start`, `stop`, `save`, `mode`, `ops`, `note` | timer |
+| `note` | A note added with `Ctrl+Alt+N` | operator |
+| `log_created` / `continued_from` | Log created / path of the log before "Save As" | save handler |
 
-공통 필드: `t`(로컬 시각), `mode`(동작 직후 모드), `obj`(활성 오브젝트).
-엣지 루프 선택처럼 같은 클릭이 이어지면 한 줄로 묶고 `n`(횟수)과 `t_end`를 붙입니다.
+Common fields: `t` (local time), `mode` (mode right after the action), `obj` (active object).
+Repeated clicks such as picking edge loops are merged into one line with `n` (count) and `t_end`.
 
 ```jsonl
 {"t":"2026-10-10T19:12:30","ev":"op","op":"mesh.loopcut_slide","msg":"mesh.loopcut_slide(MESH_OT_loopcut={number_cuts=3, edge_index=5})","mode":"EDIT_MESH","obj":"Muzzle"}
@@ -29,45 +41,51 @@ Claude/MCP 없이 블렌더 안에서 혼자 동작합니다. 기록은 나중�
 {"t":"2026-10-10T19:14:01","ev":"shot","file":"shots/0003.png","why":"save"}
 ```
 
-## 파일 위치
+## Where the files go
 
 ```
 muzzle_modeling.blend
 muzzle_modeling_history/
-├── log.jsonl      # 한 줄에 하나씩 덧붙이기만 함 (세션이 여러 번이어도 한 파일)
+├── log.jsonl      # append only, one line per event (one file for all sessions)
 └── shots/0001.png …
 ```
 
-- 블렌더를 닫았다 열어도, 며칠 뒤에도 같은 `log.jsonl`에 이어서 기록됩니다. 녹화 한 번이 `session_start` ~ `session_end` 한 구간입니다.
-- 녹화 중에 다른 파일을 열거나 블렌더를 닫으면 `session_end`(`reason`: `file`·`exit`)로 끝납니다. 다시 Start를 눌러야 이어집니다.
-- 한 번도 저장하지 않은 파일은 메모리에 모았다가 **첫 저장 때** 로그로 옮깁니다. 저장하지 않고 닫으면 확장 전용 폴더(`extensions/.user/user_default/session_recorder/unsaved/`)에 보관합니다.
-- 첫 저장 시 씬에 커스텀 프로퍼티 `session_recorder_id`를 넣습니다. 다른 이름으로 저장해도 같은 작업의 로그임을 알 수 있습니다.
+- Close Blender and come back days later, recording continues in the same `log.jsonl`. One recording is the span from `session_start` to `session_end`.
+- Opening another file or quitting Blender while recording ends the session (`reason`: `file`, `exit`). Press Start again to continue.
+- For a file that was never saved, events are kept in memory and written **on the first save**. Closing without saving keeps them in the extension's own folder (`extensions/.user/user_default/session_recorder/unsaved/`).
+- The first save adds a custom property `session_recorder_id` to the scene, so a log can be followed after "Save As" under another name.
 
-## 사용법
+## Installation
 
-3D 뷰포트 **N 사이드바 → Recorder 탭**에서 녹화합니다. 단축키 실수로 켜고 끄는 일이 없도록 시작/종료는 버튼으로만 합니다.
+1. Download `session_recorder-<version>.zip` from [Releases](https://github.com/bada0817/blender-session-recorder/releases), or build it with the command under "Development".
+2. In Blender: **Edit → Preferences → Get Extensions → ⌄ (top right) → Install from Disk…** and pick the zip.
 
-1. **Start Recording** → 제목 입력(선택, 예: 튜토리얼 이름) → **Start**
-2. 작업. 상태 표시줄에 `REC <동작 수>`가 보입니다.
-3. 중간에 **`Ctrl+Alt+N`** 또는 **Add Note** 버튼: 메모 (왜 그렇게 했는지, 막힌 점, 튜토리얼 타임스탬프 …). 스크린샷도 함께 찍습니다.
-4. **Stop Recording** → 세션 코멘트 입력(선택) → **Stop**
+## Usage
 
-- **Settings** 하위 패널(환경설정에도 동일): 현재 메모 단축키 표시(변경은 환경설정 > 애드온에서만), 자동 시작(기본 꺼짐), 뷰 설정 변경 기록 여부, 상태 표시줄 표시, 확인 주기(기본 0.25초), 스크린샷 조건(저장 시·모드 변경 시·N개 동작마다, 최소 간격 60초).
-- **Open History Folder**: 이 파일의 기록 폴더 열기.
+Recording is done from the **Recorder tab of the 3D viewport sidebar (N)**.
+Starting and stopping are buttons only, so a stray key press can't turn recording on or off.
 
-## 한계
+1. **Start Recording** → title (optional, e.g. the tutorial name) → **Start**
+2. Work. The status bar shows `REC <number of actions>`.
+3. Any time: **`Ctrl+Alt+N`** or the **Add Note** button for a note (why you did something, what went wrong, a tutorial timestamp …). A screenshot is taken with it.
+4. **Stop Recording** → comment about the session (optional) → **Stop**
 
-- 뷰포트 회전·확대, Info 에디터가 보여주지 않는 일부 클릭은 기록되지 않습니다.
-- `mode`/`obj`는 확인 주기만큼 늦게 읽어서, 동작 직후 모드를 바꾸면 다음 모드로 찍힐 수 있습니다.
-- 좌하단 패널(F9)로 값을 고치면 블렌더는 "undo → 새 값으로 다시 실행"을 합니다. 이 둘은 한 줄로 합쳐서 **최종 값**만 남기고 `adjusted`(고친 횟수)를 붙입니다. 같은 속성을 연달아 바꿀 때(`prop`)도 마찬가지입니다.
-- `Ctrl+Z` 직후 1초 안에 같은 동작을 다시 하면 조정으로 보고 합쳐질 수 있습니다.
-- 화면이 바뀌지 않은 스크린샷, 5초 안에 변경 없이 다시 저장한 경우는 기록하지 않습니다. 저장 스크린샷도 최소 간격(기본 60초)을 지킵니다. 시작·종료·메모는 항상 찍습니다.
-- 스크린샷은 PNG(장당 수백 KB)입니다. 발행할 때 줄여서 씁니다.
+- **Settings** sub-panel (same as the add-on preferences): the current note shortcut (changed in Preferences → Add-ons only), start automatically (off by default), record view changes, status bar display, check interval (0.25 s), screenshot triggers (on save, on mode change, every N actions, minimum gap 60 s).
+- **Open History Folder**: opens the log folder of the current file.
 
-## 개발
+## Limitations
+
+- Viewport navigation and some clicks the Info editor doesn't show are not recorded.
+- `mode`/`obj` are read on each check, switching mode right after an action can record the next mode.
+- Adjusting an operator in the bottom-left panel (F9) makes Blender undo it and run it again with the new values. Both are merged into one line with the **final values** and `adjusted` (number of adjustments). The same goes for repeated changes of one property (`prop`).
+- Running the same operator again within 1 s of `Ctrl+Z` can be merged as an adjustment.
+- Screenshots that show nothing new, and saves without changes within 5 s, are skipped. Save screenshots respect the minimum gap (60 s), start, stop and notes always take one.
+- Screenshots are PNG (a few hundred KB each), shrink them when using them in documents.
+
+## Development
 
 ```sh
-python3 -m unittest discover -s tests   # compact.py 테스트 (블렌더 불필요)
+python3 -m unittest discover -s tests   # tests for compact.py (no Blender needed)
 blender --command extension build --source-dir . --output-dir /tmp
 ```
 
