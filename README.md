@@ -8,6 +8,8 @@
 A Blender extension (5.1+) that **records what you do, in order**, to a log next to the `.blend` file.
 It runs on its own inside Blender, no other add-on or external program needed.
 
+![Recorder tab in the 3D viewport sidebar while recording](docs/screenshot.png)
+
 ## Why
 
 Writing study notes after following a tutorial or modeling on your own means taking screenshots again
@@ -66,12 +68,16 @@ Recording is done from the **Recorder tab of the 3D viewport sidebar (N)**.
 Starting and stopping are buttons only, so a stray key press can't turn recording on or off.
 
 1. **Start Recording** → title (optional, e.g. the tutorial name) → **Start**
-2. Work. The status bar shows `REC <number of actions>`.
+2. Work. The status bar shows `REC <number of actions>`: ![REC in the status bar](docs/statusbar.png)
 3. Any time: **`Ctrl+Alt+N`** or the **Add Note** button for a note (why you did something, what went wrong, a tutorial timestamp …). A screenshot is taken with it.
 4. **Stop Recording** → comment about the session (optional) → **Stop**
 
+   ![Stop dialog with a session comment](docs/stop-dialog.png)
+
 - **Settings** sub-panel (same as the add-on preferences): the current note shortcut (changed in Preferences → Add-ons only), start automatically (off by default), record view changes, status bar display, check interval (0.25 s), screenshot triggers (on save, on mode change, every N actions, minimum gap 60 s).
 - **Open History Folder**: opens the log folder of the current file.
+
+![Add-on preferences](docs/preferences.png)
 
 ## Limitations
 
