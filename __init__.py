@@ -785,7 +785,7 @@ class VIEW3D_PT_session_recorder_settings(bpy.types.Panel):
     def draw(self, context):
         prefs = _prefs()
         if prefs is not None:
-            _prefs_draw(prefs, context, self.layout)
+            _prefs_draw(prefs, context, self.layout, shortcut_editable=False)
 
 
 # -----------------------------------------------------------------------------
@@ -847,18 +847,32 @@ class _SessionRecorderPreferences(bpy.types.AddonPreferences):
     )
 
     def draw(self, context):
-        _prefs_draw(self, context, self.layout)
+        _prefs_draw(self, context, self.layout, shortcut_editable=True)
 
 
-def _prefs_draw(prefs, context, layout) -> None:
+def _prefs_draw(prefs, context, layout, *, shortcut_editable: bool) -> None:
     """
-    Shared by the add-on preferences and the sidebar "Settings" panel.
+    Shared by the add-on preferences and the sidebar "Settings" panel,
+    the shortcut is only changed in the preferences, the sidebar just shows it.
     """
     layout.use_property_split = True
     layout.use_property_decorate = False
 
-    layout.label(text="Note Shortcut:")
-    _keymap_draw(context, layout)
+    if shortcut_editable:
+        layout.label(text="Note Shortcut:")
+        _keymap_draw(context, layout)
+    else:
+        kmi = _keymap_note_find()
+        if kmi is None:
+            text = "not found"
+        elif not kmi.active:
+            text = "off"
+        else:
+            text = kmi.to_string()
+        row = layout.row()
+        row.label(text="Note Shortcut")
+        row.label(text=text)
+        layout.label(text="Change it in Preferences > Add-ons", icon="INFO")
 
     col = layout.column(heading="Recording")
     col.prop(prefs, "auto_start")
