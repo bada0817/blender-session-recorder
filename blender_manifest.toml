@@ -21,6 +21,7 @@ files = "Writes a log and viewport screenshots next to the .blend file"
 # The defaults plus repository-only files that aren't needed inside Blender.
 paths_exclude_pattern = [
   "__pycache__/",
+  "/.git",
   "/.git/",
   "/.claude/",
   "/*.zip",
